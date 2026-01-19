@@ -3,3 +3,9 @@ source .venv/bin/activate && python manage.py runserver
 
 Activer Background Modes → Location updates dans Xcode pour iOS.
 Tester/ajuster le callback pour envoyer la position vers /api/bus-positions/ avec ton auth.
+
+
+cd /Users/olamem3/ski
+git add .
+git commit -m "Mon changement"
+git push
