@@ -1,0 +1,5 @@
+source .venv/bin/activate && python manage.py runserver
+
+
+Activer Background Modes → Location updates dans Xcode pour iOS.
+Tester/ajuster le callback pour envoyer la position vers /api/bus-positions/ avec ton auth.

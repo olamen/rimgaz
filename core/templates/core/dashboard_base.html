@@ -1,0 +1,310 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RimGaz – {% block page_title %}Tableau de bord{% endblock %}</title>
+
+    <!-- Bootstrap 5 -->
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"
+        rel="stylesheet"
+        integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN"
+        crossorigin="anonymous"
+    />
+
+    <!-- AdminLTE (CSS de thème) -->
+    <link
+        rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/css/adminlte.min.css"
+    />
+    <!-- Font Awesome (sans SRI pour compatibilité locale) -->
+    <link
+        rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css"
+    />
+
+    <!-- Leaflet CSS (utile pour les pages carte) -->
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossorigin=""
+    />
+
+    <link rel="stylesheet" href="{% static 'core/admin.css' %}">
+	<link rel="icon" type="image/jpeg" href="{% static 'rimgazlogo.jpeg' %}">
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="hold-transition sidebar-mini layout-fixed">
+<div class="wrapper">
+    <!-- Navbar -->
+    <nav class="main-header navbar navbar-expand navbar-white navbar-light">
+        <ul class="navbar-nav">
+            <li class="nav-item d-inline-block d-sm-none">
+                <a class="nav-link" data-widget="pushmenu" href="#" role="button"><i class="fas fa-bars"></i></a>
+            </li>
+            <li class="nav-item d-none d-sm-inline-block">
+                <a href="{% url 'admin-dashboard' %}" class="nav-link fw-bold">Rimgaz – Administration</a>
+            </li>
+        </ul>
+        <ul class="navbar-nav ms-auto">
+            <li class="nav-item d-none d-sm-inline-block">
+                <span class="nav-link text-muted small">
+                    <i class="fas fa-user-circle me-1"></i>
+                    {{ request.user.username }}
+                </span>
+            </li>
+            <li class="nav-item d-none d-sm-inline-block">
+                <a href="{% url 'logout' %}" class="nav-link text-danger">
+                    <i class="fas fa-sign-out-alt me-1"></i>Déconnexion
+                </a>
+            </li>
+        </ul>
+    </nav>
+
+    <!-- Main Sidebar Container -->
+    <aside class="main-sidebar sidebar-dark-primary elevation-4">
+        <a href="{% url 'admin-dashboard' %}" class="brand-link d-flex align-items-center justify-content-center">
+            <img src="{% static 'rimgazlogo.jpeg' %}" alt="Rimgaz" class="brand-image img-circle elevation-3" style="opacity: .9; object-fit: cover;">
+            <span class="brand-text font-weight-light ms-2">Rimgaz</span>
+        </a>
+        <div class="sidebar">
+            <nav class="mt-2">
+                <ul class="nav nav-pills nav-sidebar flex-column" data-widget="treeview" data-accordion="false" role="menu">
+                    <li class="nav-item">
+                        <a href="{% url 'admin-dashboard' %}" class="nav-link {% if request.path == '/dashboard/' %}active{% endif %}">
+                            <i class="nav-icon fas fa-map-marked-alt"></i>
+                            <p>Carte en temps réel</p>
+                        </a>
+                    </li>
+
+                    <li class="nav-item has-treeview">
+                        <a href="#" class="nav-link">
+                            <i class="nav-icon fas fa-briefcase"></i>
+                            <p>
+                                Gestion métier
+                                <i class="right fas fa-angle-left"></i>
+                            </p>
+                        </a>
+                        <ul class="nav nav-treeview">
+                            <li class="nav-item">
+                                <a href="{% url 'dashboard-clients' %}" class="nav-link {% if request.path == '/dashboard/clients/' %}active{% endif %}">
+                                    <i class="far fa-circle nav-icon"></i>
+                                    <p>Clients</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{% url 'dashboard-buses' %}" class="nav-link {% if request.path == '/dashboard/buses/' %}active{% endif %}">
+                                    <i class="far fa-circle nav-icon"></i>
+                                    <p>Bus</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{% url 'dashboard-drivers' %}" class="nav-link {% if request.path == '/dashboard/drivers/' %}active{% endif %}">
+                                    <i class="far fa-circle nav-icon"></i>
+                                    <p>Chauffeurs</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{% url 'dashboard-tours' %}" class="nav-link {% if request.path == '/dashboard/tours/' %}active{% endif %}">
+                                    <i class="far fa-circle nav-icon"></i>
+                                    <p>Tournées</p>
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+
+                    <li class="nav-item has-treeview">
+                        <a href="#" class="nav-link">
+                            <i class="nav-icon fas fa-coins"></i>
+                            <p>
+                                Finances
+                                <i class="right fas fa-angle-left"></i>
+                            </p>
+                        </a>
+                        <ul class="nav nav-treeview">
+                            <li class="nav-item">
+                                <a href="{% url 'dashboard-wallets' %}" class="nav-link {% if request.path == '/dashboard/wallets/' %}active{% endif %}">
+                                    <i class="far fa-circle nav-icon"></i>
+                                    <p>Wallets clients</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{% url 'dashboard-payments' %}" class="nav-link {% if request.path == '/dashboard/payments/' %}active{% endif %}">
+                                    <i class="far fa-circle nav-icon"></i>
+                                    <p>Paiements</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{% url 'dashboard-payment-history' %}" class="nav-link {% if request.path == '/dashboard/payment-history/' %}active{% endif %}">
+                                    <i class="far fa-circle nav-icon"></i>
+                                    <p>Historique paiements</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{% url 'dashboard-client-orders' %}" class="nav-link {% if request.path == '/dashboard/client-orders/' %}active{% endif %}">
+                                    <i class="far fa-circle nav-icon"></i>
+                                    <p>Commandes clients</p>
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+
+                    <li class="nav-item has-treeview">
+                        <a href="#" class="nav-link">
+                            <i class="nav-icon fas fa-clipboard-check"></i>
+                            <p>
+                                Audit
+                                <i class="right fas fa-angle-left"></i>
+                            </p>
+                        </a>
+                        <ul class="nav nav-treeview">
+                            <li class="nav-item">
+                                <a href="{% url 'dashboard-activity-log' %}" class="nav-link {% if request.path == '/dashboard/activity-log/' %}active{% endif %}">
+                                    <i class="far fa-circle nav-icon"></i>
+                                    <p>Historique activités</p>
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+
+                    <li class="nav-item has-treeview">
+                        <a href="#" class="nav-link">
+                            <i class="nav-icon fas fa-gas-pump"></i>
+                            <p>
+                                Bouteilles
+                                <i class="right fas fa-angle-left"></i>
+                            </p>
+                        </a>
+                        <ul class="nav nav-treeview">
+                            <li class="nav-item">
+                                <a href="{% url 'dashboard-bottle-types' %}" class="nav-link {% if request.path == '/dashboard/bottle-types/' %}active{% endif %}">
+                                    <i class="far fa-circle nav-icon"></i>
+                                    <p>Types de bouteilles</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{% url 'dashboard-bottle-balances' %}" class="nav-link {% if request.path == '/dashboard/bottle-balances/' %}active{% endif %}">
+                                    <i class="far fa-circle nav-icon"></i>
+                                    <p>Soldes bouteilles</p>
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+
+                    <li class="nav-item has-treeview">
+                        <a href="#" class="nav-link">
+                            <i class="nav-icon fas fa-warehouse"></i>
+                            <p>
+                                Stock &amp; Magasin
+                                <i class="right fas fa-angle-left"></i>
+                            </p>
+                        </a>
+                        <ul class="nav nav-treeview">
+                            <li class="nav-item">
+                                <a href="{% url 'dashboard-warehouses' %}" class="nav-link {% if request.path == '/dashboard/warehouses/' %}active{% endif %}">
+                                    <i class="far fa-circle nav-icon"></i>
+                                    <p>Magasins / Dépôts</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{% url 'dashboard-warehouse-stocks' %}" class="nav-link {% if request.path == '/dashboard/warehouse-stocks/' %}active{% endif %}">
+                                    <i class="far fa-circle nav-icon"></i>
+                                    <p>Stock par magasin</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{% url 'dashboard-bus-stocks' %}" class="nav-link {% if request.path == '/dashboard/bus-stocks/' %}active{% endif %}">
+                                    <i class="far fa-circle nav-icon"></i>
+                                    <p>Stock dans les bus</p>
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+
+                    <li class="nav-item has-treeview">
+                        <a href="#" class="nav-link">
+                            <i class="nav-icon fas fa-tools"></i>
+                            <p>
+                                Techniques
+                                <i class="right fas fa-angle-left"></i>
+                            </p>
+                        </a>
+                        <ul class="nav nav-treeview">
+                            <li class="nav-item">
+                                <a href="{% url 'dashboard-bus-positions' %}" class="nav-link {% if request.path == '/dashboard/bus-positions/' %}active{% endif %}">
+                                    <i class="far fa-circle nav-icon"></i>
+                                    <p>Positions bus</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{% url 'dashboard-geofences' %}" class="nav-link {% if request.path == '/dashboard/geofences/' %}active{% endif %}">
+                                    <i class="far fa-circle nav-icon"></i>
+                                    <p>Zones geofencing</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{% url 'dashboard-bus-alerts' %}" class="nav-link {% if request.path == '/dashboard/bus-alerts/' %}active{% endif %}">
+                                    <i class="far fa-circle nav-icon"></i>
+                                    <p>Alertes bus</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="{% url 'dashboard-users' %}" class="nav-link {% if request.path == '/dashboard/users/' %}active{% endif %}">
+                                    <i class="far fa-circle nav-icon"></i>
+                                    <p>Utilisateurs</p>
+                                </a>
+                            </li>
+                            <li class="nav-item">
+                                <a href="/admin/" class="nav-link">
+                                    <i class="far fa-circle nav-icon"></i>
+                                    <p>Django admin complet</p>
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                </ul>
+            </nav>
+        </div>
+    </aside>
+
+    <!-- Content Wrapper. Contains page content -->
+    <div class="content-wrapper">
+        <section class="content pt-3">
+            <div class="container-fluid">
+                {% block content %}{% endblock %}
+            </div>
+        </section>
+    </div>
+</div>
+
+<!-- Font Awesome (icônes) -->
+<script src="https://kit.fontawesome.com/a2e0e6ad65.js" crossorigin="anonymous"></script>
+
+<!-- jQuery & Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+<script
+    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"
+    integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL"
+    crossorigin="anonymous"
+></script>
+
+<!-- AdminLTE JS -->
+<script src="https://cdn.jsdelivr.net/npm/admin-lte@3.2/dist/js/adminlte.min.js"></script>
+
+<!-- Leaflet JS -->
+<script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+></script>
+
+<script>
+    const apiBase = '/api/';
+</script>
+
+{% block extra_js %}{% endblock %}
+</body>
+</html>

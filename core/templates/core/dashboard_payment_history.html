@@ -1,0 +1,85 @@
+{% extends "core/dashboard_base.html" %}
+
+{% block page_title %}Historique des paiements{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+	<div class="col-12">
+		<h1 class="h4 mb-3">Historique des changements de statut</h1>
+	</div>
+</div>
+
+<div class="row">
+	<div class="col-12">
+		<div class="card card-primary card-outline">
+			<div class="card-header d-flex justify-content-between align-items-center">
+				<h3 class="card-title mb-0">Historique des paiements</h3>
+				<button id="refresh-history" class="btn btn-sm btn-outline-primary">Rafraîchir</button>
+			</div>
+			<div class="card-body table-responsive p-0" style="max-height: 500px;">
+				<table class="table table-hover text-nowrap mb-0" id="payment-history-table">
+					<thead>
+						<tr>
+							<th>Date</th>
+							<th>Client</th>
+							<th>Tél</th>
+							<th>Montant (MRU)</th>
+							<th>Ancien statut</th>
+							<th>Nouveau statut</th>
+							<th>Utilisateur</th>
+							<th>Note</th>
+						</tr>
+					</thead>
+					<tbody></tbody>
+				</table>
+			</div>
+		</div>
+	</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function loadPaymentHistory() {
+	const tbody = document.querySelector('#payment-history-table tbody');
+	body.innerHTML = '<tr><td colspan="8" class="text-center">Chargement...</td></tr>';
+	try {
+		const res = await fetch(apiBase + 'payment-status-history/');
+		if (!res.ok) {
+			throw new Error('Erreur API ' + res.status);
+		}
+		const data = await res.json();
+		if (!Array.isArray(data) || data.length === 0) {
+			tbody.innerHTML = '<tr><td colspan="8" class="text-center">Aucun historique pour le moment</td></tr>';
+			return;
+		}
+		tbody.innerHTML = '';
+		data.forEach(row => {
+			const tr = document.createElement('tr');
+			tr.innerHTML = `
+				<td>${row.created_at ? new Date(row.created_at).toLocaleString() : ''}</td>
+				<td>${row.client_name || ''}</td>
+				<td>${row.client_phone || ''}</td>
+				<td>${row.amount_mru}</td>
+				<td>${row.previous_status || ''}</td>
+				<td>${row.new_status}</td>
+				<td>${row.changed_by_username || ''}</td>
+				<td>${row.note || ''}</td>
+			`;
+			tbody.appendChild(tr);
+		});
+	} catch (e) {
+		console.error('Erreur chargement historique paiements', e);
+		tbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Erreur de chargement</td></tr>';
+	}
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+	loadPaymentHistory();
+	document.getElementById('refresh-history').addEventListener('click', (e) => {
+		e.preventDefault();
+		loadPaymentHistory();
+	});
+});
+</script>
+{% endblock %}

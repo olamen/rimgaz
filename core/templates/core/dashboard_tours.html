@@ -1,0 +1,53 @@
+{% extends "core/dashboard_base.html" %}
+
+{% block page_title %}Tournées{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card card-primary card-outline">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="card-title mb-0">Tournées</h3>
+                <a href="/admin/core/tour/add/" class="btn btn-sm btn-success">Nouvelle tournée</a>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover" id="tours-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Secteur</th>
+                            <th>Bus</th>
+                            <th>Chauffeur</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function loadTours() {
+    const res = await fetch(apiBase + 'tours/');
+    if (!res.ok) return;
+    const data = await res.json();
+    const tbody = document.querySelector('#tours-table tbody');
+    tbody.innerHTML = '';
+    data.forEach(t => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${t.date}</td>
+            <td>${t.sector || ''}</td>
+            <td>${t.bus}</td>
+            <td>${t.driver || ''}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+document.addEventListener('DOMContentLoaded', loadTours);
+</script>
+{% endblock %}

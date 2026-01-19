@@ -1,0 +1,52 @@
+{% extends "core/dashboard_base.html" %}
+
+{% block page_title %}Soldes bouteilles{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card card-primary card-outline">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="card-title mb-0">Soldes de bouteilles par client</h3>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover" id="bottle-balances-table">
+                    <thead>
+                        <tr>
+                            <th>Client</th>
+                            <th>Type de bouteille</th>
+                            <th>Quantité</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function loadBottleBalances() {
+    const res = await fetch(apiBase + 'client-bottle-balances/');
+    if (!res.ok) return;
+    const data = await res.json();
+    const tbody = document.querySelector('#bottle-balances-table tbody');
+    tbody.innerHTML = '';
+    data.forEach(b => {
+        const clientName = b.client ? b.client.name : '';
+        const bottleName = b.bottle_type ? b.bottle_type.name : '';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${clientName}</td>
+            <td>${bottleName}</td>
+            <td>${b.quantity}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+document.addEventListener('DOMContentLoaded', loadBottleBalances);
+</script>
+{% endblock %}

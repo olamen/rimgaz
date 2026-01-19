@@ -1,0 +1,155 @@
+{% extends "core/dashboard_base.html" %}
+
+{% block page_title %}Magasins / Dépôts{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-12">
+        <h1 class="h4 mb-3">Magasins / Dépôts</h1>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-lg-6">
+        <div class="card card-outline card-success">
+            <div class="card-header">
+                <h3 class="card-title mb-0">Ajouter / modifier un magasin</h3>
+            </div>
+            <div class="card-body">
+                <form id="warehouse-form">
+                    <input type="hidden" id="wh-id">
+                    <div class="mb-2">
+                        <label class="form-label">Nom *</label>
+                        <input type="text" class="form-control" id="wh-name" required>
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label">Adresse</label>
+                        <input type="text" class="form-control" id="wh-address">
+                    </div>
+                    <div class="row">
+                        <div class="col-6 mb-2">
+                            <label class="form-label">Latitude</label>
+                            <input type="number" step="0.000001" class="form-control" id="wh-lat">
+                        </div>
+                        <div class="col-6 mb-2">
+                            <label class="form-label">Longitude</label>
+                            <input type="number" step="0.000001" class="form-control" id="wh-lng">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-success btn-sm mt-1">Enregistrer</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover text-nowrap" id="warehouses-table">
+            <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nom</th>
+                <th>Adresse</th>
+                <th>Latitude</th>
+                <th>Longitude</th>
+                <th>Créé le</th>
+                <th style="width: 80px;">Actions</th>
+            </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+function loadWarehouses() {
+    fetch(apiBase + 'warehouses/')
+        .then(response => response.json())
+        .then(data => {
+            const tbody = document.querySelector('#warehouses-table tbody');
+            tbody.innerHTML = '';
+            data.forEach(w => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${w.id}</td>
+                    <td>${w.name}</td>
+                    <td>${w.address || ''}</td>
+                    <td>${w.gps_latitude || ''}</td>
+                    <td>${w.gps_longitude || ''}</td>
+                    <td>${new Date(w.created_at).toLocaleString()}</td>
+                    <td><button type="button" class="btn btn-xs btn-outline-primary wh-edit" data-id="${w.id}" data-name="${w.name}" data-address="${w.address || ''}" data-lat="${w.gps_latitude || ''}" data-lng="${w.gps_longitude || ''}"><i class="fas fa-edit"></i></button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            const editButtons = document.querySelectorAll('.wh-edit');
+            editButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.getElementById('wh-id').value = btn.dataset.id;
+                    document.getElementById('wh-name').value = btn.dataset.name || '';
+                    document.getElementById('wh-address').value = btn.dataset.address || '';
+                    document.getElementById('wh-lat').value = btn.dataset.lat || '';
+                    document.getElementById('wh-lng').value = btn.dataset.lng || '';
+                });
+            });
+        });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadWarehouses();
+
+    const form = document.getElementById('warehouse-form');
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        const idVal = document.getElementById('wh-id').value;
+        const payload = {
+            name: document.getElementById('wh-name').value,
+            address: document.getElementById('wh-address').value,
+            gps_latitude: document.getElementById('wh-lat').value || null,
+            gps_longitude: document.getElementById('wh-lng').value || null,
+        };
+        const isEdit = !!idVal;
+        const url = isEdit ? (apiBase + 'warehouses/' + idVal + '/') : (apiBase + 'warehouses/');
+        const method = isEdit ? 'PATCH' : 'POST';
+        const errorMessage = isEdit ? 'Erreur lors de la mise à jour du magasin' : 'Erreur lors de la création du magasin';
+
+        fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken'),
+            },
+            body: JSON.stringify(payload),
+        })
+        .then(r => {
+            if (!r.ok) throw new Error(errorMessage);
+            return r.json();
+        })
+        .then(() => {
+            document.getElementById('wh-id').value = '';
+            form.reset();
+            loadWarehouses();
+        })
+        .catch(err => console.error(err));
+    });
+});
+</script>
+{% endblock %}

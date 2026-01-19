@@ -1,0 +1,384 @@
+{% extends "core/dashboard_base.html" %}
+
+{% block page_title %}Carte en temps réel{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+	<div class="col-md-3">
+		<div class="small-box bg-info">
+			<div class="inner">
+				<h3 id="bus-count">-</h3>
+				<p>Bus en suivi</p>
+			</div>
+			<div class="icon"><i class="fas fa-bus"></i></div>
+		</div>
+	</div>
+	<div class="col-md-3">
+		<div class="small-box bg-success">
+			<div class="inner">
+				<h3 id="client-count">-</h3>
+				<p>Clients géolocalisés</p>
+			</div>
+			<div class="icon"><i class="fas fa-user-friends"></i></div>
+		</div>
+	</div>
+	<div class="col-md-3">
+		<div class="small-box bg-warning">
+			<div class="inner">
+				<h3 id="pending-payments-count">-</h3>
+				<p>Paiements en attente</p>
+			</div>
+			<div class="icon"><i class="fas fa-money-check-alt"></i></div>
+		</div>
+	</div>
+	<div class="col-md-3">
+		<div class="small-box bg-danger">
+			<div class="inner">
+				<h3 id="active-alerts-count">-</h3>
+				<p>Alertes bus actives</p>
+			</div>
+			<div class="icon"><i class="fas fa-exclamation-triangle"></i></div>
+		</div>
+	</div>
+</div>
+
+<div class="row mb-3">
+	<div class="col-md-6 d-flex align-items-stretch">
+		<div class="card w-100 mb-0">
+			<div class="card-header py-2"><h3 class="card-title mb-0">Filtre clients sur la carte</h3></div>
+			<div class="card-body p-2">
+				<div class="row g-2 align-items-end">
+					<div class="col-md-6">
+						<label class="form-label mb-0">Recherche client</label>
+						<input type="text" id="client-search" class="form-control form-control-sm" placeholder="Nom ou téléphone">
+					</div>
+					<div class="col-md-3">
+						<label class="form-label mb-0">Type</label>
+						<input type="text" id="client-type-filter" class="form-control form-control-sm" placeholder="ex: restaurant">
+					</div>
+					<div class="col-md-3">
+						<label class="form-label mb-0">Statut</label>
+						<select id="client-status-filter" class="form-select form-select-sm">
+							<option value="">Tous</option>
+							<option value="active">Actif</option>
+							<option value="suspended">Suspendu</option>
+							<option value="late">En retard</option>
+						</select>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+	<div class="col-md-6 d-flex align-items-stretch">
+		<div class="card w-100 mb-0">
+			<div class="card-header py-2"><h3 class="card-title mb-0">Accès rapide</h3></div>
+			<div class="card-body p-2">
+				<div class="row g-2">
+					<div class="col-6">
+						<a href="{% url 'dashboard-clients' %}" class="btn btn-outline-secondary w-100 mb-1"><i class="fas fa-users me-1"></i> Clients</a>
+						<a href="{% url 'dashboard-tours' %}" class="btn btn-outline-secondary w-100 mb-1"><i class="fas fa-route me-1"></i> Tournées</a>
+						<a href="{% url 'dashboard-geofences' %}" class="btn btn-outline-secondary w-100 mb-1"><i class="fas fa-draw-polygon me-1"></i> Zones</a>
+					</div>
+					<div class="col-6">
+						<a href="{% url 'dashboard-payments' %}" class="btn btn-outline-secondary w-100 mb-1"><i class="fas fa-money-bill-wave me-1"></i> Paiements</a>
+						<a href="{% url 'dashboard-warehouses' %}" class="btn btn-outline-secondary w-100 mb-1"><i class="fas fa-warehouse me-1"></i> Magasins</a>
+						<a href="{% url 'dashboard-bus-alerts' %}" class="btn btn-outline-secondary w-100 mb-1"><i class="fas fa-exclamation-triangle me-1"></i> Alertes bus</a>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<div class="row">
+	<div class="col-12">
+		<div class="card card-primary card-outline">
+			<div class="card-header d-flex justify-content-between align-items-center">
+				<h3 class="card-title mb-0">Carte en temps réel</h3>
+				<div class="d-flex align-items-center gap-3">
+					<div class="form-check form-switch mb-0">
+						<input class="form-check-input" type="checkbox" id="toggle-geofences" checked>
+						<label class="form-check-label" for="toggle-geofences">Zones geofencing</label>
+					</div>
+					<button id="refresh-map" class="btn btn-sm btn-outline-primary">Rafraîchir</button>
+				</div>
+			</div>
+			<div class="card-body p-0">
+				<div id="map" class="rimgaz-map"></div>
+			</div>
+		</div>
+	</div>
+</div>
+<!-- Container pour notifications temps réel -->
+<div id="realtime-notifications" style="position: fixed; top: 70px; right: 20px; z-index: 1050; max-width: 320px;"></div>
+{% endblock %}
+
+{% block extra_js %}
+<style>
+.kpi-flash {
+	animation: kpiFlash 1.2s ease-out 1;
+}
+@keyframes kpiFlash {
+	0% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0.9); }
+	70% { box-shadow: 0 0 0 12px rgba(255, 193, 7, 0); }
+	100% { box-shadow: 0 0 0 0 rgba(255, 193, 7, 0); }
+}
+</style>
+<script>
+	let map;
+	let busMarkers = {};
+	let clientMarkers = {};
+	let allClients = [];
+	let geofencePolygonLayers = [];
+	let geofenceCircleLayers = [];
+	let showGeofences = true;
+	let previousPendingPaymentsCount = null;
+	let previousActiveAlertsCount = null;
+	let alertAudioContext = null;
+	function playAlertSound() {
+		try {
+			if (!window.AudioContext && !window.webkitAudioContext) {
+				return;
+			}
+			if (!alertAudioContext) {
+				alertAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+			}
+			const ctx = alertAudioContext;
+			const osc = ctx.createOscillator();
+			const gain = ctx.createGain();
+			osc.type = 'sine';
+			osc.frequency.value = 880;
+			gain.gain.setValueAtTime(0.18, ctx.currentTime);
+			gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+			osc.connect(gain);
+			gain.connect(ctx.destination);
+			osc.start();
+			osc.stop(ctx.currentTime + 0.22);
+		} catch (e) {
+			console.warn('Impossible de jouer le son d\'alerte', e);
+		}
+	}
+
+	function showRealtimeNotification(message, type = 'info') {
+		const container = document.getElementById('realtime-notifications');
+		if (!container) return;
+
+		const alertDiv = document.createElement('div');
+		const bootstrapType = type === 'danger' ? 'danger' : (type === 'success' ? 'success' : 'info');
+		alertDiv.className = `alert alert-${bootstrapType} alert-dismissible fade show mb-2 py-2 px-3`;
+		alertDiv.innerHTML = `
+			<strong>Mise à jour:</strong> ${message}
+			<button type="button" class="close" data-dismiss="alert" aria-label="Close">
+				<span aria-hidden="true">&times;</span>
+			</button>
+		`;
+		container.appendChild(alertDiv);
+		setTimeout(() => {
+			if (alertDiv.parentNode) {
+				alertDiv.parentNode.removeChild(alertDiv);
+			}
+		}, 8000);
+	}
+
+	function initMap() {
+		map = L.map('map').setView([18.078, -15.978], 12);
+
+		L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+			maxZoom: 19,
+			attribution: '&copy; OpenStreetMap contributors'
+		}).addTo(map);
+	}
+
+	async function fetchJson(url) {
+		const response = await fetch(url);
+		if (!response.ok) {
+			throw new Error('Erreur API: ' + response.status);
+		}
+		return await response.json();
+	}
+
+	async function refreshGeofences() {
+		// Nettoyer les anciennes couches
+		geofencePolygonLayers.forEach(l => map.removeLayer(l));
+		geofenceCircleLayers.forEach(l => map.removeLayer(l));
+		geofencePolygonLayers = [];
+		geofenceCircleLayers = [];
+
+		try {
+			const zones = await fetchJson(apiBase + 'geofences/');
+			zones.forEach(z => {
+				if (Array.isArray(z.polygon) && z.polygon.length >= 3) {
+					const polyLatLngs = z.polygon.map(pt => [pt[0], pt[1]]);
+					const polyLayer = L.polygon(polyLatLngs, { color: 'green', fillOpacity: 0.1 });
+					geofencePolygonLayers.push(polyLayer);
+					if (showGeofences) {
+						polyLayer.addTo(map);
+					}
+				} else if (z.center_latitude != null && z.center_longitude != null && z.radius_meters != null) {
+					const circleLayer = L.circle([z.center_latitude, z.center_longitude], {
+						radius: z.radius_meters,
+						color: 'blue',
+						fillOpacity: 0.05
+					});
+					circleLayer.addTo(map);
+					geofenceCircleLayers.push(circleLayer);
+				}
+			});
+		} catch (e) {
+			console.error('Erreur chargement geofences', e);
+		}
+	}
+
+	function updateBusMarkers(busPositions) {
+		const latestByBus = {};
+		busPositions.forEach(p => {
+			if (!latestByBus[p.bus] || new Date(p.created_at) > new Date(latestByBus[p.bus].created_at)) {
+				latestByBus[p.bus] = p;
+			}
+		});
+
+		Object.values(busMarkers).forEach(m => map.removeLayer(m));
+		busMarkers = {};
+
+		Object.values(latestByBus).forEach(p => {
+			const hasAlert = !!p.has_alert;
+			const iconUrl = hasAlert
+				? 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png'
+				: 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/images/marker-icon.png';
+			const marker = L.marker([p.latitude, p.longitude], {
+				icon: L.icon({
+					iconUrl: iconUrl,
+					iconSize: [25, 41],
+					iconAnchor: [12, 41],
+					popupAnchor: [1, -34]
+				})
+			}).addTo(map);
+			const alertLabel = hasAlert ? '<br><span style="color:#dc3545;font-weight:bold;">Alerte active</span>' : '';
+			marker.bindPopup(`<b>Bus #${p.bus}</b><br>Status: ${p.status}${alertLabel}`);
+			busMarkers[p.bus] = marker;
+		});
+
+		document.getElementById('bus-count').textContent = Object.keys(latestByBus).length;
+	}
+
+	function applyClientFilters() {
+		const q = document.getElementById('client-search').value.toLowerCase();
+		const typeFilter = document.getElementById('client-type-filter').value.toLowerCase();
+		const statusFilter = document.getElementById('client-status-filter').value;
+
+		return allClients.filter(c => {
+			if (c.gps_latitude === null || c.gps_longitude === null) {
+				return false;
+			}
+			const text = `${c.name} ${c.phone}`.toLowerCase();
+			if (q && !text.includes(q)) {
+				return false;
+			}
+			if (typeFilter && String(c.client_type || '').toLowerCase().indexOf(typeFilter) === -1) {
+				return false;
+			}
+			if (statusFilter && c.status !== statusFilter) {
+				return false;
+			}
+			return true;
+		});
+	}
+
+	function updateClientMarkers() {
+		Object.values(clientMarkers).forEach(m => map.removeLayer(m));
+		clientMarkers = {};
+
+		const visibleClients = applyClientFilters();
+
+		visibleClients.forEach(c => {
+				const isPending = !!c.has_pending_delivery;
+				const marker = L.circleMarker([c.gps_latitude, c.gps_longitude], {
+					radius: isPending ? 8 : 6,
+					color: isPending ? '#dc3545' : '#28a745',
+					fillColor: isPending ? '#dc3545' : '#28a745',
+					fillOpacity: 0.8
+				}).addTo(map);
+				const statusLabel = isPending ? 'Demande de livraison en attente' : 'Aucune demande en attente';
+				marker.bindPopup(`<b>${c.name}</b><br>${c.phone}<br><small>${statusLabel}</small>`);
+				clientMarkers[c.id] = marker;
+			});
+
+		document.getElementById('client-count').textContent = visibleClients.length;
+	}
+
+	async function refreshData() {
+		try {
+			const [busPositions, clients, payments, alerts] = await Promise.all([
+				fetchJson(apiBase + 'bus-positions/'),
+				fetchJson(apiBase + 'clients/'),
+				fetchJson(apiBase + 'payments/'),
+				fetchJson(apiBase + 'bus-alerts/')
+			]);
+			updateBusMarkers(busPositions);
+			allClients = clients;
+			updateClientMarkers();
+
+			// KPI paiements en attente
+			const pendingCount = Array.isArray(payments)
+				? payments.filter(p => p.status === 'pending').length
+				: 0;
+			const pendingEl = document.getElementById('pending-payments-count');
+			if (pendingEl) {
+				pendingEl.textContent = pendingCount;
+				if (previousPendingPaymentsCount !== null && previousPendingPaymentsCount !== pendingCount) {
+					const diff = pendingCount - previousPendingPaymentsCount;
+					if (diff > 0) {
+						showRealtimeNotification(`Nouveaux paiements en attente: +${diff}.`, 'info');
+						pendingEl.closest('.small-box')?.classList.add('kpi-flash');
+						setTimeout(() => pendingEl.closest('.small-box')?.classList.remove('kpi-flash'), 1400);
+					}
+				}
+				previousPendingPaymentsCount = pendingCount;
+			}
+
+			// KPI alertes bus actives
+			const activeAlerts = Array.isArray(alerts)
+				? alerts.filter(a => a.is_resolved === false).length
+				: 0;
+			const alertsEl = document.getElementById('active-alerts-count');
+			if (alertsEl) {
+				alertsEl.textContent = activeAlerts;
+				if (previousActiveAlertsCount !== null && previousActiveAlertsCount !== activeAlerts) {
+					const diffA = activeAlerts - previousActiveAlertsCount;
+					if (diffA > 0) {
+						playAlertSound();
+						showRealtimeNotification(`Nouvelles alertes bus détectées: +${diffA}.`, 'danger');
+						alertsEl.closest('.small-box')?.classList.add('kpi-flash');
+						setTimeout(() => alertsEl.closest('.small-box')?.classList.remove('kpi-flash'), 1400);
+					}
+				}
+				previousActiveAlertsCount = activeAlerts;
+			}
+		} catch (e) {
+			console.error(e);
+		}
+	}
+
+	document.addEventListener('DOMContentLoaded', () => {
+		initMap();
+		refreshData();
+		refreshGeofences();
+		document.getElementById('refresh-map').addEventListener('click', () => {
+			refreshData();
+			refreshGeofences();
+		});
+		document.getElementById('client-search').addEventListener('input', updateClientMarkers);
+		document.getElementById('client-type-filter').addEventListener('input', updateClientMarkers);
+		document.getElementById('client-status-filter').addEventListener('change', updateClientMarkers);
+		setInterval(refreshData, 15000);
+		document.getElementById('toggle-geofences').addEventListener('change', (e) => {
+			showGeofences = e.target.checked;
+			if (showGeofences) {
+				geofencePolygonLayers.forEach(l => l.addTo(map));
+			} else {
+				geofencePolygonLayers.forEach(l => map.removeLayer(l));
+			}
+		});
+	});
+</script>
+{% endblock %}

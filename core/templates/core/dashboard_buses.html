@@ -1,0 +1,262 @@
+{% extends "core/dashboard_base.html" %}
+
+{% block page_title %}Bus{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-12 d-flex justify-content-between align-items-center">
+        <h1 class="h4 mb-0">Bus</h1>
+        <button type="button" id="show-bus-create" class="btn btn-sm btn-success">Nouveau bus</button>
+    </div>
+</div>
+
+<div class="row mb-3 d-none" id="bus-create-row">
+    <div class="col-lg-8">
+        <div class="card card-outline card-success">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="card-title mb-0">Ajouter / modifier un bus</h3>
+                <button type="button" class="btn btn-tool" id="hide-bus-create"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="card-body">
+                <form id="bus-create-form" class="row g-2 align-items-end">
+                    <input type="hidden" id="bc-id">
+                    <div class="col-md-4">
+                        <label class="form-label">Nom *</label>
+                        <input type="text" class="form-control" id="bc-name" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Plaque</label>
+                        <input type="text" class="form-control" id="bc-plate">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Capacité</label>
+                        <input type="number" min="0" class="form-control" id="bc-capacity">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Vitesse max (km/h)</label>
+                        <input type="number" step="0.1" class="form-control" id="bc-speed">
+                    </div>
+                    <div class="col-12 mt-2">
+                        <button type="submit" class="btn btn-success">Enregistrer le bus</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-lg-8">
+        <div class="card card-outline card-info">
+            <div class="card-header">
+                <h3 class="card-title mb-0">Configurer la vitesse maximale d'un bus</h3>
+            </div>
+            <div class="card-body">
+                <form id="bus-speed-form" class="row g-2 align-items-end">
+                    <div class="col-md-6">
+                        <label class="form-label">Bus</label>
+                        <select id="bs-bus" class="form-select" required></select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Vitesse max (km/h)</label>
+                        <input type="number" step="0.1" class="form-control" id="bs-speed" required>
+                    </div>
+                    <div class="col-md-3">
+                        <button type="submit" class="btn btn-primary w-100">Enregistrer</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card card-primary card-outline">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="card-title mb-0">Liste des bus</h3>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover" id="buses-table">
+                    <thead>
+                        <tr>
+                            <th>Nom</th>
+                            <th>Plaque</th>
+                            <th>Capacité</th>
+                            <th>Vitesse max (km/h)</th>
+                            <th style="width: 80px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+async function loadBuses() {
+    const res = await fetch(apiBase + 'buses/');
+    if (!res.ok) return;
+    const data = await res.json();
+    const tbody = document.querySelector('#buses-table tbody');
+    tbody.innerHTML = '';
+    const select = document.getElementById('bs-bus');
+    select.innerHTML = '';
+    data.forEach(b => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${b.name}</td>
+            <td>${b.plate_number || ''}</td>
+            <td>${b.capacity || ''}</td>
+			<td>${b.max_speed_kmh || ''}</td>
+			<td><button type="button" class="btn btn-xs btn-outline-primary bus-edit" data-id="${b.id}" data-name="${b.name}" data-plate="${b.plate_number || ''}" data-capacity="${b.capacity || ''}" data-speed="${b.max_speed_kmh || ''}"><i class="fas fa-edit"></i></button></td>
+        `;
+        tbody.appendChild(tr);
+
+        const opt = document.createElement('option');
+        opt.value = b.id;
+        opt.textContent = b.name;
+        opt.dataset.speed = b.max_speed_kmh || '';
+        select.appendChild(opt);
+    });
+
+    // Pre-fill speed when bus changes
+    select.addEventListener('change', function () {
+        const selected = select.options[select.selectedIndex];
+        document.getElementById('bs-speed').value = selected.dataset.speed || '';
+    });
+    if (select.options.length > 0) {
+        select.dispatchEvent(new Event('change'));
+    }
+
+    // Bind edit buttons
+    const editButtons = document.querySelectorAll('.bus-edit');
+    editButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const id = btn.dataset.id;
+            const name = btn.dataset.name || '';
+            const plate = btn.dataset.plate || '';
+            const capacity = btn.dataset.capacity || '';
+            const speed = btn.dataset.speed || '';
+            const createRow = document.getElementById('bus-create-row');
+            createRow.classList.remove('d-none');
+            document.getElementById('bc-id').value = id;
+            document.getElementById('bc-name').value = name;
+            document.getElementById('bc-plate').value = plate;
+            document.getElementById('bc-capacity').value = capacity;
+            document.getElementById('bc-speed').value = speed;
+        });
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadBuses();
+
+    const form = document.getElementById('bus-speed-form');
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        const busId = document.getElementById('bs-bus').value;
+        const speed = document.getElementById('bs-speed').value;
+
+        fetch(apiBase + 'buses/' + busId + '/', {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken'),
+            },
+            body: JSON.stringify({ max_speed_kmh: speed }),
+        })
+        .then(r => {
+            if (!r.ok) throw new Error('Erreur lors de la mise à jour de la vitesse maximale');
+            return r.json();
+        })
+        .then(() => {
+            loadBuses();
+        })
+        .catch(err => console.error(err));
+    });
+
+    const createRow = document.getElementById('bus-create-row');
+    const showCreateBtn = document.getElementById('show-bus-create');
+    const hideCreateBtn = document.getElementById('hide-bus-create');
+    const createForm = document.getElementById('bus-create-form');
+
+    if (showCreateBtn && createRow && hideCreateBtn && createForm) {
+        showCreateBtn.addEventListener('click', () => {
+            createRow.classList.remove('d-none');
+            document.getElementById('bc-id').value = '';
+            createForm.reset();
+        });
+        hideCreateBtn.addEventListener('click', () => {
+            createRow.classList.add('d-none');
+        });
+        createForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            const name = document.getElementById('bc-name').value.trim();
+                        const idVal = document.getElementById('bc-id').value;
+            const plate = document.getElementById('bc-plate').value.trim();
+            const capacityVal = document.getElementById('bc-capacity').value;
+            const speedVal = document.getElementById('bc-speed').value;
+
+            if (!name) {
+                alert("Le nom du bus est obligatoire.");
+                return;
+            }
+
+            const payload = {
+                name: name,
+                plate_number: plate || "",
+                capacity: capacityVal ? parseInt(capacityVal, 10) : null,
+                max_speed_kmh: speedVal ? speedVal : null,
+            };
+
+            const isEdit = !!idVal;
+            const url = isEdit ? (apiBase + 'buses/' + idVal + '/') : (apiBase + 'buses/');
+            const method = isEdit ? 'PATCH' : 'POST';
+            const errorMessage = isEdit ? "Erreur lors de la mise à jour du bus" : "Erreur lors de la création du bus";
+
+            fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken'),
+                },
+                body: JSON.stringify(payload),
+            })
+            .then(r => {
+                if (!r.ok) throw new Error(errorMessage);
+                return r.json();
+            })
+            .then(() => {
+                document.getElementById('bc-id').value = '';
+                createForm.reset();
+                createRow.classList.add('d-none');
+                loadBuses();
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Impossible d'enregistrer le bus: " + err.message);
+            });
+        });
+    }
+});
+</script>
+{% endblock %}

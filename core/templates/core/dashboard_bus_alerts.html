@@ -1,0 +1,54 @@
+{% extends "core/dashboard_base.html" %}
+
+{% block page_title %}Alertes bus{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-12">
+        <h1 class="h4 mb-3">Alertes bus (vitesse & geofencing)</h1>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover text-nowrap" id="bus-alerts-table">
+            <thead>
+            <tr>
+                <th>Date</th>
+                <th>Bus</th>
+                <th>Type</th>
+                <th>Message</th>
+                <th>Résolue ?</th>
+            </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function loadBusAlerts() {
+    fetch(apiBase + 'bus-alerts/')
+        .then(r => r.json())
+        .then(data => {
+            const tbody = document.querySelector('#bus-alerts-table tbody');
+            tbody.innerHTML = '';
+            data.forEach(a => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${new Date(a.created_at).toLocaleString()}</td>
+                    <td>${a.bus ? a.bus.name : ''}</td>
+                    <td>${a.alert_type}</td>
+                    <td>${a.message}</td>
+                    <td>${a.is_resolved ? 'Oui' : 'Non'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        });
+}
+
+document.addEventListener('DOMContentLoaded', loadBusAlerts);
+</script>
+{% endblock %}

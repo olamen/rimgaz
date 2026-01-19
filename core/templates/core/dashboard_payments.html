@@ -1,0 +1,182 @@
+{% extends "core/dashboard_base.html" %}
+
+{% block page_title %}Paiements{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card card-primary card-outline">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="card-title mb-0">Paiements</h3>
+                <a href="/admin/core/payment/add/" class="btn btn-sm btn-success">Nouveau paiement</a>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover" id="payments-table">
+                    <thead>
+                        <tr>
+                            <th>Client</th>
+                            <th>Montant (MRU)</th>
+                            <th>Méthode</th>
+                            <th>Reçu</th>
+                            <th>Statut</th>
+                            <th>Date</th>
+                            <th style="width: 140px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Overlay de prévisualisation du reçu -->
+<div id="receipt-preview-overlay" class="receipt-overlay d-none">
+    <div class="receipt-overlay-content">
+        <button type="button" class="btn btn-sm btn-light receipt-overlay-close">&times;</button>
+        <img id="receipt-preview-img" src="" alt="Reçu de paiement" class="img-fluid rounded shadow" />
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Styles simples pour l'overlay de prévisualisation
+const receiptPreviewStyles = `
+    .receipt-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1050;
+    }
+    .receipt-overlay-content {
+        position: relative;
+        max-width: 90vw;
+        max-height: 90vh;
+    }
+    .receipt-overlay-content img {
+        max-width: 100%;
+        max-height: 100%;
+    }
+    .receipt-overlay-close {
+        position: absolute;
+        top: -32px;
+        right: -8px;
+    }
+`;
+
+if (!document.getElementById('receipt-preview-style')) {
+    const styleEl = document.createElement('style');
+    styleEl.id = 'receipt-preview-style';
+    styleEl.innerHTML = receiptPreviewStyles;
+    document.head.appendChild(styleEl);
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+async function loadPayments() {
+    const res = await fetch(apiBase + 'payments/');
+    if (!res.ok) return;
+    const data = await res.json();
+    const tbody = document.querySelector('#payments-table tbody');
+    tbody.innerHTML = '';
+    data.forEach(p => {
+        const actions = (p.status === 'pending_admin' || p.status === 'pending')
+            ? `<button class="btn btn-xs btn-success me-1" data-action="validate" data-id="${p.id}">Valider</button>
+               <button class="btn btn-xs btn-danger" data-action="reject" data-id="${p.id}">Rejeter</button>`
+            : '';
+        const receiptCell = p.receipt_image
+            ? `<button type="button" class="btn btn-xs btn-outline-secondary" data-receipt-url="${p.receipt_image}">Voir</button>`
+            : '';
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${p.client}</td>
+            <td>${p.amount_mru}</td>
+            <td>${p.method || ''}</td>
+            <td>${receiptCell}</td>
+            <td>${p.status}</td>
+            <td>${p.created_at}</td>
+            <td>${actions}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadPayments();
+
+    const tbody = document.querySelector('#payments-table tbody');
+    const overlay = document.getElementById('receipt-preview-overlay');
+    const overlayImg = document.getElementById('receipt-preview-img');
+
+    tbody.addEventListener('click', function (e) {
+        // Prévisualisation du reçu
+        const previewBtn = e.target.closest('button[data-receipt-url]');
+        if (previewBtn) {
+            const url = previewBtn.dataset.receiptUrl;
+            if (url) {
+                overlayImg.src = url;
+                overlay.classList.remove('d-none');
+            }
+            return;
+        }
+
+        // Actions de validation / rejet
+        const btn = e.target.closest('button[data-action]');
+        if (!btn) return;
+        const id = btn.dataset.id;
+        const action = btn.dataset.action;
+        const newStatus = action === 'validate' ? 'validated' : 'rejected';
+
+        fetch(apiBase + 'payments/' + id + '/', {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken'),
+            },
+            body: JSON.stringify({ status: newStatus }),
+        })
+        .then(r => {
+            if (!r.ok) {
+                return r.json().then(errData => {
+                    const msg = errData && errData.detail ? errData.detail : 'Erreur mise à jour paiement';
+                    throw new Error(msg);
+                }).catch(() => {
+                    throw new Error('Erreur mise à jour paiement');
+                });
+            }
+            return r.json();
+        })
+        .then(() => loadPayments())
+        .catch(err => {
+            console.error(err);
+            alert(err.message || 'Erreur mise à jour paiement');
+        });
+    });
+
+    // Fermeture de l'overlay en cliquant sur la croix ou le fond
+    overlay.addEventListener('click', function (e) {
+        if (e.target === overlay || e.target.classList.contains('receipt-overlay-close')) {
+            overlay.classList.add('d-none');
+            overlayImg.src = '';
+        }
+    });
+});
+</script>
+{% endblock %}

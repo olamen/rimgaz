@@ -1,0 +1,169 @@
+{% extends "core/dashboard_base.html" %}
+
+{% block page_title %}Stock par magasin{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-12">
+        <h1 class="h4 mb-3">Stock de bouteilles par magasin</h1>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-lg-8">
+        <div class="card card-outline card-success">
+            <div class="card-header">
+                <h3 class="card-title mb-0">Ajouter / mettre à jour un stock magasin</h3>
+            </div>
+            <div class="card-body">
+                <form id="warehouse-stock-form" class="row g-2 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label">Magasin *</label>
+                        <select id="ws-warehouse" class="form-select" required></select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Type de bouteille *</label>
+                        <select id="ws-bottle-type" class="form-select" required></select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Quantité *</label>
+                        <input type="number" class="form-control" id="ws-qty" required>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-success w-100">Enregistrer</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover text-nowrap" id="warehouse-stocks-table">
+            <thead>
+            <tr>
+                <th>Magasin</th>
+                <th>Type de bouteille</th>
+                <th>Quantité</th>
+                <th>Dernière mise à jour</th>
+                <th style="width: 80px;">Actions</th>
+            </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+function loadWarehouseStocks() {
+    fetch(apiBase + 'warehouse-stocks/')
+        .then(response => response.json())
+        .then(data => {
+            const tbody = document.querySelector('#warehouse-stocks-table tbody');
+            tbody.innerHTML = '';
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${row.warehouse ? row.warehouse.name : ''}</td>
+                    <td>${row.bottle_type ? row.bottle_type.name : ''}</td>
+                    <td>${row.quantity}</td>
+                    <td>${new Date(row.updated_at).toLocaleString()}</td>
+                    <td><button type="button" class="btn btn-xs btn-outline-primary ws-edit" data-warehouse-id="${row.warehouse ? row.warehouse.id : ''}" data-bottle-type-id="${row.bottle_type ? row.bottle_type.id : ''}" data-qty="${row.quantity}"><i class="fas fa-edit"></i></button></td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            const editButtons = document.querySelectorAll('.ws-edit');
+            editButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const whId = btn.dataset.warehouseId || '';
+                    const btId = btn.dataset.bottleTypeId || '';
+                    const qty = btn.dataset.qty || '';
+                    const whSelect = document.getElementById('ws-warehouse');
+                    const btSelect = document.getElementById('ws-bottle-type');
+                    if (whSelect) whSelect.value = whId;
+                    if (btSelect) btSelect.value = btId;
+                    document.getElementById('ws-qty').value = qty;
+                });
+            });
+        });
+}
+
+function loadWarehouseStockFormData() {
+    Promise.all([
+        fetch(apiBase + 'warehouses/').then(r => r.json()),
+        fetch(apiBase + 'bottle-types/').then(r => r.json()),
+    ]).then(([warehouses, bottleTypes]) => {
+        const whSelect = document.getElementById('ws-warehouse');
+        const btSelect = document.getElementById('ws-bottle-type');
+        whSelect.innerHTML = '';
+        btSelect.innerHTML = '';
+
+        warehouses.forEach(w => {
+            const opt = document.createElement('option');
+            opt.value = w.id;
+            opt.textContent = w.name;
+            whSelect.appendChild(opt);
+        });
+
+        bottleTypes.forEach(b => {
+            const opt = document.createElement('option');
+            opt.value = b.id;
+            opt.textContent = b.name;
+            btSelect.appendChild(opt);
+        });
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadWarehouseStocks();
+    loadWarehouseStockFormData();
+
+    const form = document.getElementById('warehouse-stock-form');
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        const payload = {
+            warehouse_id: document.getElementById('ws-warehouse').value,
+            bottle_type_id: document.getElementById('ws-bottle-type').value,
+            quantity: document.getElementById('ws-qty').value,
+        };
+
+        fetch(apiBase + 'warehouse-stocks/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken'),
+            },
+            body: JSON.stringify(payload),
+        })
+        .then(r => {
+            if (!r.ok) throw new Error('Erreur lors de la mise à jour du stock');
+            return r.json();
+        })
+        .then(() => {
+            form.reset();
+            loadWarehouseStocks();
+        })
+        .catch(err => console.error(err));
+    });
+});
+</script>
+{% endblock %}

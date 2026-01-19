@@ -1,0 +1,205 @@
+{% extends "core/dashboard_base.html" %}
+
+{% block page_title %}Utilisateurs{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-4">
+        <div class="card card-primary card-outline">
+            <div class="card-header">
+                <h3 class="card-title mb-0" id="user-form-title">Créer un utilisateur</h3>
+            </div>
+            <div class="card-body">
+                <form id="user-form">
+                    <div class="mb-2">
+                        <label class="form-label mb-0">Nom d'utilisateur</label>
+                        <input type="text" id="u-username" class="form-control form-control-sm" required />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label mb-0">Email</label>
+                        <input type="email" id="u-email" class="form-control form-control-sm" />
+                    </div>
+                    <div class="mb-2">
+                        <label class="form-label mb-0">Mot de passe</label>
+                        <input type="password" id="u-password" class="form-control form-control-sm" required />
+                    </div>
+                    <div class="form-check mb-1">
+                        <input class="form-check-input" type="checkbox" id="u-is-staff" />
+                        <label class="form-check-label" for="u-is-staff">Utilisateur staff (accès back-office)</label>
+                    </div>
+                    <div class="form-check mb-1">
+                        <input class="form-check-input" type="checkbox" id="u-is-financial" />
+                        <label class="form-check-label" for="u-is-financial">Utilisateur financier (valider les paiements)</label>
+                    </div>
+                    <div class="form-check mb-2">
+                        <input class="form-check-input" type="checkbox" id="u-is-superuser" />
+                        <label class="form-check-label" for="u-is-superuser">Super administrateur</label>
+                    </div>
+                    <button type="submit" class="btn btn-sm btn-primary" id="user-submit-btn">Créer</button>
+                    <button type="button" class="btn btn-sm btn-secondary ms-1 d-none" id="user-cancel-edit-btn">Annuler</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-8">
+        <div class="card card-primary card-outline">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="card-title mb-0">Liste des utilisateurs</h3>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover" id="users-table">
+                    <thead>
+                        <tr>
+                            <th>Nom d'utilisateur</th>
+                            <th>Email</th>
+                            <th>Rôle</th>
+                            <th>Actif</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentEditingUserId = null;
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+async function loadUsers() {
+    const res = await fetch(apiBase + 'users/');
+    if (!res.ok) return;
+    const data = await res.json();
+    const tbody = document.querySelector('#users-table tbody');
+    tbody.innerHTML = '';
+    data.forEach(u => {
+        let role = 'Utilisateur';
+        if (u.is_superuser) {
+            role = 'Superadmin';
+        } else if (u.can_validate_payments) {
+            role = 'Financier';
+        } else if (u.is_staff) {
+            role = 'Staff';
+        }
+        const tr = document.createElement('tr');
+        tr.dataset.userId = u.id;
+        tr.dataset.username = u.username;
+        tr.dataset.email = u.email || '';
+        tr.dataset.isStaff = u.is_staff ? '1' : '0';
+        tr.dataset.isSuperuser = u.is_superuser ? '1' : '0';
+        tr.dataset.isFinancial = u.can_validate_payments ? '1' : '0';
+        tr.dataset.isActive = u.is_active ? '1' : '0';
+        tr.innerHTML = `
+            <td>${u.username}</td>
+            <td>${u.email || ''}</td>
+            <td>${role}</td>
+            <td>${u.is_active ? 'Oui' : 'Non'}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function resetUserForm() {
+    const form = document.getElementById('user-form');
+    form.reset();
+    currentEditingUserId = null;
+    document.getElementById('user-form-title').textContent = 'Créer un utilisateur';
+    document.getElementById('user-submit-btn').textContent = 'Créer';
+    document.getElementById('u-password').required = true;
+    document.getElementById('user-cancel-edit-btn').classList.add('d-none');
+}
+
+function fillFormForEditFromRow(tr) {
+    currentEditingUserId = tr.dataset.userId;
+    document.getElementById('u-username').value = tr.dataset.username || '';
+    document.getElementById('u-email').value = tr.dataset.email || '';
+    document.getElementById('u-password').value = '';
+    document.getElementById('u-password').required = false; // mot de passe optionnel en édition
+    document.getElementById('u-is-staff').checked = tr.dataset.isStaff === '1';
+    document.getElementById('u-is-financial').checked = tr.dataset.isFinancial === '1';
+    document.getElementById('u-is-superuser').checked = tr.dataset.isSuperuser === '1';
+    document.getElementById('user-form-title').textContent = 'Modifier l\'utilisateur';
+    document.getElementById('user-submit-btn').textContent = 'Mettre à jour';
+    document.getElementById('user-cancel-edit-btn').classList.remove('d-none');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadUsers();
+
+    const form = document.getElementById('user-form');
+    const cancelBtn = document.getElementById('user-cancel-edit-btn');
+
+    // Cliquer sur une ligne permet de charger l'utilisateur dans le formulaire pour édition
+    const tbody = document.querySelector('#users-table tbody');
+    tbody.addEventListener('click', function (e) {
+        const tr = e.target.closest('tr');
+        if (!tr || !tr.dataset.userId) return;
+        fillFormForEditFromRow(tr);
+    });
+
+    cancelBtn.addEventListener('click', function () {
+        resetUserForm();
+    });
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        const payload = {
+            username: document.getElementById('u-username').value,
+            email: document.getElementById('u-email').value,
+            password: document.getElementById('u-password').value,
+            is_staff: document.getElementById('u-is-staff').checked,
+            is_financial: document.getElementById('u-is-financial').checked,
+            is_superuser: document.getElementById('u-is-superuser').checked,
+            is_active: true,
+        };
+        const url = currentEditingUserId ? (apiBase + 'users/' + currentEditingUserId + '/') : (apiBase + 'users/');
+        const method = currentEditingUserId ? 'PATCH' : 'POST';
+        // Si on est en édition et que le mot de passe est vide, on ne l'envoie pas pour ne pas l'écraser
+        if (currentEditingUserId && !payload.password) {
+            delete payload.password;
+        }
+        fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken'),
+            },
+            body: JSON.stringify(payload),
+        })
+        .then(r => {
+            if (!r.ok) return r.json().then(errData => {
+                const msg = errData && errData.detail ? errData.detail : 'Erreur lors de la sauvegarde de l\'utilisateur';
+                throw new Error(msg);
+            }).catch(() => {
+                throw new Error('Erreur lors de la sauvegarde de l\'utilisateur');
+            });
+            return r.json();
+        })
+        .then(() => {
+            resetUserForm();
+            loadUsers();
+        })
+        .catch(err => {
+            console.error(err);
+            alert(err.message || 'Erreur lors de la sauvegarde de l\'utilisateur');
+        });
+    });
+});
+</script>
+{% endblock %}

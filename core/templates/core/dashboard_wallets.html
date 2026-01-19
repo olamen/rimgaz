@@ -1,0 +1,51 @@
+{% extends "core/dashboard_base.html" %}
+
+{% block page_title %}Wallets{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card card-primary card-outline">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="card-title mb-0">Wallets clients</h3>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover" id="wallets-table">
+                    <thead>
+                        <tr>
+                            <th>Client</th>
+                            <th>Solde (MRU)</th>
+                            <th>Dernière mise à jour</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function loadWallets() {
+    const res = await fetch(apiBase + 'wallets/');
+    if (!res.ok) return;
+    const data = await res.json();
+    const tbody = document.querySelector('#wallets-table tbody');
+    tbody.innerHTML = '';
+    data.forEach(w => {
+        const tr = document.createElement('tr');
+        const clientName = w.client ? w.client.name : '';
+        tr.innerHTML = `
+            <td>${clientName}</td>
+            <td>${w.balance_mru}</td>
+            <td>${w.updated_at}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+document.addEventListener('DOMContentLoaded', loadWallets);
+</script>
+{% endblock %}

@@ -1,0 +1,143 @@
+{% extends "core/dashboard_base.html" %}
+
+{% block page_title %}Historique des activités{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-12 d-flex justify-content-between align-items-center">
+        <h1 class="h4 mb-0">Historique des activités</h1>
+        <button id="al-refresh" class="btn btn-sm btn-outline-primary">Rafraîchir</button>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-lg-8">
+        <div class="card card-outline card-info mb-3">
+            <div class="card-header">
+                <h3 class="card-title mb-0">Filtres rapides</h3>
+            </div>
+                <div class="card-body">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label mb-0">Texte libre</label>
+                            <input type="text" id="al-search" class="form-control form-control-sm" placeholder="Modèle, objet, utilisateur, description...">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label mb-0">Action</label>
+                            <select id="al-action" class="form-select form-select-sm">
+                                <option value="">Toutes</option>
+                                <option value="create">Création</option>
+                                <option value="update">Modification</option>
+                                <option value="delete">Suppression</option>
+                                <option value="other">Autre</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label mb-0">Modèle</label>
+                            <input type="text" id="al-model" class="form-control form-control-sm" placeholder="ex: Client, Payment">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label mb-0">Utilisateur</label>
+                            <input type="text" id="al-user" class="form-control form-control-sm" placeholder="login">
+                        </div>
+                    </div>
+                </div>
+        </div>
+    </div>
+</div>
+
+<div class="card card-primary card-outline">
+    <div class="card-header">
+        <h3 class="card-title mb-0">Dernières activités</h3>
+    </div>
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover text-nowrap" id="activity-log-table">
+            <thead>
+                <tr>
+                    <th>Date / heure</th>
+                    <th>Utilisateur</th>
+                    <th>Modèle</th>
+                    <th>Objet</th>
+                    <th>Action</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let allActivityLogs = [];
+
+function formatActionLabel(action) {
+    if (action === 'create') return 'Création';
+    if (action === 'update') return 'Modification';
+    if (action === 'delete') return 'Suppression';
+    if (action === 'other') return 'Autre';
+    return action || '';
+}
+
+function renderActivityLogs() {
+    const tbody = document.querySelector('#activity-log-table tbody');
+    tbody.innerHTML = '';
+
+    const search = document.getElementById('al-search').value.toLowerCase();
+    const actionFilter = document.getElementById('al-action').value;
+    const modelFilter = document.getElementById('al-model').value.toLowerCase();
+    const userFilter = document.getElementById('al-user').value.toLowerCase();
+
+    const filtered = allActivityLogs.filter(row => {
+        if (actionFilter && row.action !== actionFilter) return false;
+        if (modelFilter && (!row.model_name || row.model_name.toLowerCase().indexOf(modelFilter) === -1)) return false;
+        if (userFilter && (!row.user_username || row.user_username.toLowerCase().indexOf(userFilter) === -1)) return false;
+        if (search) {
+            const text = [
+                row.model_name || '',
+                row.object_id || '',
+                row.user_username || '',
+                row.description || '',
+            ].join(' ').toLowerCase();
+            if (text.indexOf(search) === -1) return false;
+        }
+        return true;
+    });
+
+    filtered.forEach(row => {
+        const tr = document.createElement('tr');
+        const dt = row.created_at ? new Date(row.created_at) : null;
+        tr.innerHTML = `
+            <td>${dt ? dt.toLocaleString() : ''}</td>
+            <td>${row.user_username || ''}</td>
+            <td>${row.model_name}</td>
+            <td>${row.object_id}</td>
+            <td>${formatActionLabel(row.action)}</td>
+            <td>${row.description || ''}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function loadActivityLogs() {
+    fetch(apiBase + 'activity-logs/')
+        .then(r => r.json())
+        .then(data => {
+            allActivityLogs = Array.isArray(data) ? data : [];
+            renderActivityLogs();
+        })
+        .catch(err => console.error(err));
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadActivityLogs();
+
+    document.getElementById('al-refresh').addEventListener('click', loadActivityLogs);
+    document.getElementById('al-search').addEventListener('input', renderActivityLogs);
+    document.getElementById('al-action').addEventListener('change', renderActivityLogs);
+    document.getElementById('al-model').addEventListener('input', renderActivityLogs);
+    document.getElementById('al-user').addEventListener('input', renderActivityLogs);
+});
+</script>
+{% endblock %}

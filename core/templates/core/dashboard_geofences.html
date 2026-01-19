@@ -1,0 +1,300 @@
+{% extends "core/dashboard_base.html" %}
+
+{% block page_title %}Zones de geofencing{% endblock %}
+
+{% block extra_css %}
+<style>
+    #geofence-map {
+        width: 100%;
+        height: 420px;
+        border-radius: 0.25rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-12">
+        <h1 class="h4 mb-3">Zones de geofencing</h1>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-lg-6">
+        <div class="card card-outline card-success">
+            <div class="card-header">
+                <h3 class="card-title mb-0">Créer une zone par polygone</h3>
+            </div>
+            <div class="card-body">
+                <form id="geofence-form" class="row g-2 align-items-end">
+                    <div class="col-md-8">
+                        <label class="form-label">Nom *</label>
+                        <input type="text" class="form-control" id="gf-name" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label d-block">Active</label>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="gf-active" checked>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <p class="text-muted mb-2">
+                            Cliquez sur la carte pour ajouter les points du polygone.
+                            Quand vous avez au moins 3 points, cliquez sur
+                            <strong>Fermer le polygone</strong>, puis sur
+                            <strong>Enregistrer la zone</strong>.
+                        </p>
+                    </div>
+                    <div class="col-12 mb-2 d-flex gap-2">
+                        <button type="button" id="close-polygon" class="btn btn-sm btn-outline-primary">
+                            Fermer le polygone
+                        </button>
+                        <button type="button" id="clear-polygon" class="btn btn-sm btn-outline-secondary">
+                            Effacer le polygone
+                        </button>
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary">Enregistrer la zone</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="card card-outline card-primary mb-3">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center w-100">
+                    <h3 class="card-title mb-0">Carte des zones</h3>
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="toggle-polygons" checked>
+                        <label class="form-check-label" for="toggle-polygons">Afficher les polygones</label>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div id="geofence-map"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover text-nowrap" id="geofences-table">
+            <thead>
+            <tr>
+                <th>Nom</th>
+                <th>Type</th>
+                <th>Détails</th>
+                <th>Active</th>
+            </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+let map;
+let drawPolyline = null;
+let drawPolygon = null;
+let drawnPoints = [];
+let polygonLayers = [];
+let circleLayers = [];
+let showPolygons = true;
+
+function initMap() {
+    map = L.map('geofence-map').setView([18.0735, -15.9582], 12);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    map.on('click', function (e) {
+        // Ajout d'un point pour dessiner le polygone
+        drawnPoints.push([e.latlng.lat, e.latlng.lng]);
+        if (drawPolyline) {
+            drawPolyline.setLatLngs(drawnPoints);
+        } else {
+            drawPolyline = L.polyline(drawnPoints, { color: 'blue' }).addTo(map);
+        }
+    });
+}
+
+function clearDrawnPolygon() {
+    drawnPoints = [];
+    if (drawPolyline) {
+        map.removeLayer(drawPolyline);
+        drawPolyline = null;
+    }
+    if (drawPolygon) {
+        map.removeLayer(drawPolygon);
+        drawPolygon = null;
+    }
+}
+
+function loadGeofences() {
+    const tbody = document.querySelector('#geofences-table tbody');
+    tbody.innerHTML = '';
+
+    // Nettoyer les couches existantes
+    polygonLayers.forEach(layer => map.removeLayer(layer));
+    circleLayers.forEach(layer => map.removeLayer(layer));
+    polygonLayers = [];
+    circleLayers = [];
+
+    fetch(apiBase + 'geofences/')
+        .then(r => r.json())
+        .then(data => {
+            data.forEach(z => {
+                const tr = document.createElement('tr');
+
+                let type = '-';
+                let details = '';
+
+                if (Array.isArray(z.polygon) && z.polygon.length >= 3) {
+                    type = 'Polygone';
+                    details = z.polygon.length + ' points';
+                    const polyLatLngs = z.polygon.map(pt => [pt[0], pt[1]]);
+                    const polyLayer = L.polygon(polyLatLngs, { color: 'green', fillOpacity: 0.15 });
+                    polygonLayers.push(polyLayer);
+                    if (showPolygons) {
+                        polyLayer.addTo(map);
+                    }
+                } else if (z.center_latitude != null && z.center_longitude != null && z.radius_meters != null) {
+                    type = 'Cercle';
+                    details = z.radius_meters + ' m';
+                    const circleLayer = L.circle([z.center_latitude, z.center_longitude], {
+                        radius: z.radius_meters,
+                        color: 'blue',
+                        fillOpacity: 0.1
+                    });
+                    circleLayer.addTo(map);
+                    circleLayers.push(circleLayer);
+                } else {
+                    details = '<span class="text-muted">-</span>';
+                }
+
+                tr.innerHTML = `
+                    <td>${z.name}</td>
+                    <td>${type}</td>
+                    <td>${details}</td>
+                    <td>${z.is_active ? 'Oui' : 'Non'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    initMap();
+    loadGeofences();
+
+    const form = document.getElementById('geofence-form');
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        const name = document.getElementById('gf-name').value.trim();
+        const isActive = document.getElementById('gf-active').checked;
+
+        if (!name) {
+            alert('Le nom de la zone est obligatoire');
+            return;
+        }
+        if (!drawPolygon || !drawnPoints.length || drawnPoints.length < 3) {
+            alert('Veuillez dessiner et fermer un polygone avec au moins 3 points sur la carte.');
+            return;
+        }
+
+        const payload = {
+            name: name,
+            polygon: drawnPoints,
+            is_active: isActive,
+        };
+
+        fetch(apiBase + 'geofences/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken'),
+            },
+            body: JSON.stringify(payload),
+        })
+        .then(async r => {
+            if (!r.ok) {
+                let msg = 'Erreur lors de la création de la zone (' + r.status + ')';
+                try {
+                    const data = await r.json();
+                    if (data && data.detail) {
+                        msg = data.detail;
+                    } else if (data && typeof data === 'object') {
+                        msg += '\n' + JSON.stringify(data);
+                    }
+                } catch (e) {
+                    // ignore JSON parse error
+                }
+                alert(msg);
+                throw new Error(msg);
+            }
+            return r.json();
+        })
+        .then(() => {
+            form.reset();
+            document.getElementById('gf-active').checked = true;
+            clearDrawnPolygon();
+            loadGeofences();
+        })
+        .catch(err => console.error(err));
+    });
+
+        document.getElementById('toggle-polygons').addEventListener('change', function (e) {
+            showPolygons = e.target.checked;
+            if (showPolygons) {
+                // Afficher toutes les couches polygones existantes
+                polygonLayers.forEach(layer => layer.addTo(map));
+            } else {
+                // Masquer toutes les couches polygones
+                polygonLayers.forEach(layer => map.removeLayer(layer));
+            }
+        });
+
+        document.getElementById('close-polygon').addEventListener('click', function (e) {
+            e.preventDefault();
+            if (drawnPoints.length < 3) {
+                alert('Ajoutez au moins 3 points avant de fermer le polygone.');
+                return;
+            }
+            if (drawPolygon) {
+                map.removeLayer(drawPolygon);
+            }
+            // Fermer le polygone
+            drawPolygon = L.polygon(drawnPoints, { color: 'green', fillOpacity: 0.2 }).addTo(map);
+            if (drawPolyline) {
+                map.removeLayer(drawPolyline);
+                drawPolyline = null;
+            }
+        });
+
+    document.getElementById('clear-polygon').addEventListener('click', function (e) {
+        e.preventDefault();
+        clearDrawnPolygon();
+    });
+});
+</script>
+{% endblock %}

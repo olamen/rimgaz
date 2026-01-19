@@ -1,0 +1,214 @@
+{% extends "core/dashboard_base.html" %}
+
+{% block page_title %}Chauffeurs{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-12 d-flex justify-content-between align-items-center">
+        <h1 class="h4 mb-0">Chauffeurs</h1>
+        <button type="button" id="show-driver-create" class="btn btn-sm btn-success">Nouveau chauffeur</button>
+    </div>
+</div>
+
+<div class="row mb-3 d-none" id="driver-create-row">
+    <div class="col-lg-8">
+        <div class="card card-outline card-success">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="card-title mb-0">Ajouter / modifier un chauffeur</h3>
+                <button type="button" class="btn btn-tool" id="hide-driver-create"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="card-body">
+                <form id="driver-form" class="row g-2 align-items-end">
+                    <input type="hidden" id="dr-id">
+                    <div class="col-md-4">
+                        <label class="form-label">Nom *</label>
+                        <input type="text" class="form-control" id="dr-name" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Téléphone *</label>
+                        <input type="text" class="form-control" id="dr-phone" required>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Bus (optionnel)</label>
+                        <select id="dr-bus" class="form-select">
+                            <option value="">-- Aucun --</option>
+                        </select>
+                    </div>
+                    <div class="col-12 mt-2">
+                        <button type="submit" class="btn btn-success">Enregistrer le chauffeur</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card card-primary card-outline">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="card-title mb-0">Liste des chauffeurs</h3>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover" id="drivers-table">
+                    <thead>
+                        <tr>
+                            <th>Nom</th>
+                            <th>Téléphone</th>
+                            <th>Bus (ID)</th>
+                            <th style="width: 80px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+async function loadDriverBuses() {
+    const select = document.getElementById('dr-bus');
+    if (!select) return;
+    select.innerHTML = '<option value="">-- Aucun --</option>';
+    try {
+        const res = await fetch(apiBase + 'buses/');
+        if (!res.ok) return;
+        const data = await res.json();
+        data.forEach(b => {
+            const opt = document.createElement('option');
+            opt.value = b.id;
+            opt.textContent = b.name;
+            select.appendChild(opt);
+        });
+    } catch (e) {
+        console.error(e);
+    }
+}
+
+async function loadDrivers() {
+    const res = await fetch(apiBase + 'drivers/');
+    if (!res.ok) return;
+    const data = await res.json();
+    const tbody = document.querySelector('#drivers-table tbody');
+    tbody.innerHTML = '';
+    data.forEach(d => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${d.name}</td>
+            <td>${d.phone}</td>
+            <td>${d.bus || ''}</td>
+            <td><button type="button" class="btn btn-xs btn-outline-primary driver-edit" data-id="${d.id}" data-name="${d.name}" data-phone="${d.phone}" data-bus="${d.bus || ''}"><i class="fas fa-edit"></i></button></td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    // Bind edit buttons
+    const editButtons = document.querySelectorAll('.driver-edit');
+    editButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const id = btn.dataset.id;
+            const name = btn.dataset.name || '';
+            const phone = btn.dataset.phone || '';
+            const busId = btn.dataset.bus || '';
+            const row = document.getElementById('driver-create-row');
+            row.classList.remove('d-none');
+            document.getElementById('dr-id').value = id;
+            document.getElementById('dr-name').value = name;
+            document.getElementById('dr-phone').value = phone;
+            const busSelect = document.getElementById('dr-bus');
+            if (busSelect) {
+                busSelect.value = busId || '';
+            }
+        });
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadDrivers();
+    loadDriverBuses();
+
+    const row = document.getElementById('driver-create-row');
+    const showBtn = document.getElementById('show-driver-create');
+    const hideBtn = document.getElementById('hide-driver-create');
+    const form = document.getElementById('driver-form');
+
+    if (showBtn && row && hideBtn && form) {
+        showBtn.addEventListener('click', () => {
+            row.classList.remove('d-none');
+            document.getElementById('dr-id').value = '';
+            form.reset();
+            loadDriverBuses();
+        });
+        hideBtn.addEventListener('click', () => {
+            row.classList.add('d-none');
+        });
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            const idVal = document.getElementById('dr-id').value;
+            const name = document.getElementById('dr-name').value.trim();
+            const phone = document.getElementById('dr-phone').value.trim();
+            const busVal = document.getElementById('dr-bus').value;
+
+            if (!name || !phone) {
+                alert('Nom et téléphone sont obligatoires.');
+                return;
+            }
+
+            const payload = {
+                name: name,
+                phone: phone,
+                bus: busVal || null,
+            };
+
+            const isEdit = !!idVal;
+            const url = isEdit ? (apiBase + 'drivers/' + idVal + '/') : (apiBase + 'drivers/');
+            const method = isEdit ? 'PATCH' : 'POST';
+            const errorMessage = isEdit ? "Erreur lors de la mise à jour du chauffeur" : "Erreur lors de la création du chauffeur";
+
+            fetch(url, {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken'),
+                },
+                body: JSON.stringify(payload),
+            })
+            .then(r => {
+                if (!r.ok) throw new Error(errorMessage);
+                return r.json();
+            })
+            .then(() => {
+                document.getElementById('dr-id').value = '';
+                form.reset();
+                row.classList.add('d-none');
+                loadDrivers();
+                loadDriverBuses();
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Impossible d'enregistrer le chauffeur: " + err.message);
+            });
+        });
+    }
+});
+</script>
+{% endblock %}

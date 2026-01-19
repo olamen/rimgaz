@@ -1,0 +1,188 @@
+{% extends "core/dashboard_base.html" %}
+
+{% block page_title %}Clients{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-12">
+        <h1 class="h4 mb-3">Clients</h1>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-lg-8">
+        <div class="card card-outline card-success">
+            <div class="card-header">
+                <h3 class="card-title mb-0">Ajouter / modifier un client</h3>
+            </div>
+            <div class="card-body">
+                <form id="client-form" class="row g-2 align-items-end">
+                    <input type="hidden" id="cl-id">
+                    <input type="hidden" id="cl-status">
+                    <div class="col-md-4">
+                        <label class="form-label">Nom *</label>
+                        <input type="text" class="form-control" id="cl-name" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Téléphone *</label>
+                        <input type="text" class="form-control" id="cl-phone" required>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Type</label>
+                        <select id="cl-type" class="form-select mb-1">
+                            <option value="household">Ménage</option>
+                            <option value="business">Commerce</option>
+                            <option value="restaurant">Restaurant</option>
+                        </select>
+                        <input type="text" class="form-control" id="cl-type-custom" placeholder="Autre type (mosquée, usine, ...)">
+                    </div>
+                    <div class="col-md-10">
+                        <label class="form-label">Adresse</label>
+                        <input type="text" class="form-control" id="cl-address">
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-success w-100">Enregistrer</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card card-primary card-outline">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="card-title mb-0">Liste des clients</h3>
+            </div>
+            <div class="card-body table-responsive p-0">
+                <table class="table table-hover" id="clients-table">
+                    <thead>
+                        <tr>
+                            <th>Nom</th>
+                            <th>Téléphone</th>
+                            <th>Adresse</th>
+                            <th>Type</th>
+                            <th>Statut</th>
+                            <th style="width: 80px;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+async function loadClients() {
+    const res = await fetch(apiBase + 'clients/');
+    if (!res.ok) return;
+    const data = await res.json();
+    const tbody = document.querySelector('#clients-table tbody');
+    tbody.innerHTML = '';
+    data.forEach(c => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${c.name}</td>
+            <td>${c.phone}</td>
+            <td>${c.address || ''}</td>
+            <td>${c.client_type}</td>
+            <td>${c.status}</td>
+            <td><button type="button" class="btn btn-xs btn-outline-primary client-edit" data-id="${c.id}" data-name="${c.name}" data-phone="${c.phone}" data-address="${c.address || ''}" data-type="${c.client_type || ''}" data-status="${c.status}"><i class="fas fa-edit"></i></button></td>
+        `;
+        tbody.appendChild(tr);
+    });
+
+    // Bind edit buttons
+    const editButtons = document.querySelectorAll('.client-edit');
+    editButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+            const id = btn.dataset.id;
+            const name = btn.dataset.name || '';
+            const phone = btn.dataset.phone || '';
+            const address = btn.dataset.address || '';
+            const typeVal = btn.dataset.type || '';
+            const status = btn.dataset.status || 'active';
+            document.getElementById('cl-id').value = id;
+            document.getElementById('cl-status').value = status;
+            document.getElementById('cl-name').value = name;
+            document.getElementById('cl-phone').value = phone;
+            document.getElementById('cl-address').value = address;
+            const typeSelect = document.getElementById('cl-type');
+            const typeCustom = document.getElementById('cl-type-custom');
+            const knownTypes = ['household', 'business', 'restaurant'];
+            if (knownTypes.includes(typeVal)) {
+                typeSelect.value = typeVal;
+                typeCustom.value = '';
+            } else {
+                typeSelect.value = 'household';
+                typeCustom.value = typeVal;
+            }
+        });
+    });
+}
+document.addEventListener('DOMContentLoaded', () => {
+    loadClients();
+
+    const form = document.getElementById('client-form');
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        const idVal = document.getElementById('cl-id').value;
+        let statusVal = document.getElementById('cl-status').value || 'active';
+        if (!idVal) {
+            statusVal = 'active';
+        }
+        const payload = {
+            name: document.getElementById('cl-name').value,
+            phone: document.getElementById('cl-phone').value,
+            address: document.getElementById('cl-address').value,
+            client_type: (document.getElementById('cl-type-custom').value || document.getElementById('cl-type').value),
+            language: 'fr',
+            status: statusVal,
+        };
+        const isEdit = !!idVal;
+        const url = isEdit ? (apiBase + 'clients/' + idVal + '/') : (apiBase + 'clients/');
+        const method = isEdit ? 'PATCH' : 'POST';
+        const errorMessage = isEdit ? 'Erreur lors de la mise à jour du client' : 'Erreur lors de la création du client';
+
+        fetch(url, {
+            method: method,
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken'),
+            },
+            body: JSON.stringify(payload),
+        })
+        .then(r => {
+            if (!r.ok) throw new Error(errorMessage);
+            return r.json();
+        })
+        .then(() => {
+            document.getElementById('cl-id').value = '';
+            document.getElementById('cl-status').value = '';
+            form.reset();
+            loadClients();
+        })
+        .catch(err => console.error(err));
+    });
+});
+</script>
+{% endblock %}

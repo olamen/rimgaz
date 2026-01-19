@@ -1,0 +1,153 @@
+{% extends "core/dashboard_base.html" %}
+
+{% block page_title %}Stock dans les bus{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-12">
+        <h1 class="h4 mb-3">Stock de bouteilles dans les bus</h1>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-lg-8">
+        <div class="card card-outline card-success">
+            <div class="card-header">
+                <h3 class="card-title mb-0">Ajouter / mettre à jour un stock bus</h3>
+            </div>
+            <div class="card-body">
+                <form id="bus-stock-form" class="row g-2 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label">Bus *</label>
+                        <select id="bs-bus" class="form-select" required></select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Type de bouteille *</label>
+                        <select id="bs-bottle-type" class="form-select" required></select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Quantité *</label>
+                        <input type="number" class="form-control" id="bs-qty" required>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-success w-100">Enregistrer</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body table-responsive p-0">
+        <table class="table table-hover text-nowrap" id="bus-stocks-table">
+            <thead>
+            <tr>
+                <th>Bus</th>
+                <th>Type de bouteille</th>
+                <th>Quantité</th>
+                <th>Dernière mise à jour</th>
+            </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+function loadBusStocks() {
+    fetch(apiBase + 'bus-stocks/')
+        .then(response => response.json())
+        .then(data => {
+            const tbody = document.querySelector('#bus-stocks-table tbody');
+            tbody.innerHTML = '';
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${row.bus ? row.bus.name : ''}</td>
+                    <td>${row.bottle_type ? row.bottle_type.name : ''}</td>
+                    <td>${row.quantity}</td>
+                    <td>${new Date(row.updated_at).toLocaleString()}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        });
+}
+
+function loadBusStockFormData() {
+    Promise.all([
+        fetch(apiBase + 'buses/').then(r => r.json()),
+        fetch(apiBase + 'bottle-types/').then(r => r.json()),
+    ]).then(([buses, bottleTypes]) => {
+        const busSelect = document.getElementById('bs-bus');
+        const btSelect = document.getElementById('bs-bottle-type');
+        busSelect.innerHTML = '';
+        btSelect.innerHTML = '';
+
+        buses.forEach(b => {
+            const opt = document.createElement('option');
+            opt.value = b.id;
+            opt.textContent = b.name;
+            busSelect.appendChild(opt);
+        });
+
+        bottleTypes.forEach(bt => {
+            const opt = document.createElement('option');
+            opt.value = bt.id;
+            opt.textContent = bt.name;
+            btSelect.appendChild(opt);
+        });
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadBusStocks();
+    loadBusStockFormData();
+
+    const form = document.getElementById('bus-stock-form');
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        const payload = {
+            bus_id: document.getElementById('bs-bus').value,
+            bottle_type_id: document.getElementById('bs-bottle-type').value,
+            quantity: document.getElementById('bs-qty').value,
+        };
+
+        fetch(apiBase + 'bus-stocks/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken'),
+            },
+            body: JSON.stringify(payload),
+        })
+        .then(r => {
+            if (!r.ok) throw new Error('Erreur lors de la mise à jour du stock bus');
+            return r.json();
+        })
+        .then(() => {
+            form.reset();
+            loadBusStocks();
+        })
+        .catch(err => console.error(err));
+    });
+});
+</script>
+{% endblock %}
