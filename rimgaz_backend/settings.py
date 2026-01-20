@@ -29,7 +29,7 @@ _allowed_hosts_env = os.environ.get(
 )
 ALLOWED_HOSTS = [h.strip() for h in _allowed_hosts_env.split(",") if h.strip()]
  
-
+ 
 # Application definition
 
 INSTALLED_APPS = [
